@@ -51,6 +51,9 @@ namespace GoogleCalendarToOutlookSyncer
             /* Create and update Google events in Outlook */
             foreach (var googleEvent in googleEvents.Items)
             {
+                if (googleEvent?.Description?.Contains("no-sync") ?? false)
+                    continue;
+
                 AppointmentItem outlookEvent = findOutlookEventById(outlookEvents, googleEvent.Id);
                 googleEventIDs.Add(googleEvent.Id);
 
