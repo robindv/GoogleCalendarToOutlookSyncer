@@ -32,10 +32,17 @@ namespace GoogleCalendarToOutlookSyncer
 
             while(true)
             {
-                sync();
+                try
+                {
+                    sync();
+                }
+                catch(System.Exception e)
+                {
+                    Console.WriteLine($"{DateTime.Now} something went wrong, maybe the internet is down?");
+                }
 
-                /* Sleep for 30 minutes */
-                Thread.Sleep(1000 * 60 * 30);
+                /* Sleep for 10 minutes */
+                Thread.Sleep(1000 * 60 * 10);
             }
         }
 
