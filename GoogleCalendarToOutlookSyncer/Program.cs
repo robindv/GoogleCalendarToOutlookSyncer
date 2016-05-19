@@ -17,12 +17,13 @@ namespace GoogleCalendarToOutlookSyncer
 {
     class Program
     {
-        static string[] Scopes = { CalendarService.Scope.CalendarReadonly };
+        static string[] Scopes = { CalendarService.Scope.Calendar };
         static string ApplicationName = "Google-Outlook-syncer";
 
         /* This property will be added to the appointments in Outlook to keep track of them */
         static string UserPropertyName = "sync-id";
 
+        static CalendarService service;
         static DateTime min = DateTime.Today;
         static DateTime max = new DateTime(2016, 12, 31);
 
@@ -54,12 +55,19 @@ namespace GoogleCalendarToOutlookSyncer
             var outlookEvents = GetOutlookAppointmentsInRange(calendarFolder, min, max);
 
             List<string> googleEventIDs = new List<string>();
+            Dictionary<string, Event> googleOutlookEventIDs = new Dictionary<string, Event>();
 
             /* Create and update Google events in Outlook */
             foreach (var googleEvent in googleEvents.Items)
             {
                 if (googleEvent?.Description?.Contains("no-sync") ?? false)
                     continue;
+
+                if(googleEvent?.Description?.Contains("outlook-id:") ?? false)
+                {
+                    googleOutlookEventIDs.Add(googleEvent.Description.Split(':')[1], googleEvent);
+                    continue;
+                }
 
                 AppointmentItem outlookEvent = findOutlookEventById(outlookEvents, googleEvent.Id);
                 googleEventIDs.Add(googleEvent.Id);
@@ -72,7 +80,7 @@ namespace GoogleCalendarToOutlookSyncer
                     var property = outlookEvent.UserProperties.Find(UserPropertyName);
                     property.Value = googleEvent.Id;
                     outlookEvent.ReminderSet = false;
-                    Console.WriteLine(DateTime.Now + " Added: " + googleEvent.Summary);
+                    Console.WriteLine(DateTime.Now + " Added in Outlook: " + googleEvent.Summary);
                 }
 
                 /* Update properties in Outlook */
@@ -90,15 +98,54 @@ namespace GoogleCalendarToOutlookSyncer
                 AppointmentItem outlookEvent = outlookEvents[i];
                 var property = outlookEvent.UserProperties.Find(UserPropertyName);
 
-                /* Created in Outlook, do not delete. */
+                /* Created in Outlook, sync back to Google Calendar */
                 if (property == null)
+                {
+                    Event gevent = googleOutlookEventIDs.Where(kvp => kvp.Key == outlookEvent.EntryID).Select(kvp => kvp.Value).FirstOrDefault();
+                    bool is_new = false;
+
+                    if (gevent == null)
+                    {
+                        gevent = new Event()
+                        {
+                            Start = new EventDateTime(),
+                            End = new EventDateTime(),
+                            Description = "outlook-id:" + outlookEvent.EntryID
+                        };
+                        is_new = true;
+                        Console.WriteLine(DateTime.Now + " Added in Google Calendar: " + outlookEvent.Subject);
+                    };
+
+                    gevent.Start.DateTime = outlookEvent.Start;
+                    gevent.End.DateTime = outlookEvent.End;
+                    gevent.Summary = outlookEvent.Subject;
+                    gevent.Location = outlookEvent.Location;
+                    gevent.Visibility = outlookEvent.Sensitivity == OlSensitivity.olPrivate ? "private" : "public";
+
+                    if (is_new)
+                        service.Events.Insert(gevent, "primary").Execute();
+                    else
+                        service.Events.Update(gevent, "primary", gevent.Id).Execute();
+
+                    /* Remove from the list so we can track deleted events. */
+                    googleOutlookEventIDs.Remove(outlookEvent.EntryID);
+
                     continue;
+                }
+
 
                 if(! googleEventIDs.Contains(property.Value))
                 {
-                    Console.WriteLine(DateTime.Now + " Deleted: " + outlookEvent.Subject);
+                    Console.WriteLine(DateTime.Now + " Deleted from Outlook: " + outlookEvent.Subject);
                     outlookEvent.Delete();
                 }
+            }
+
+            /* Remove deleted events Outlook events from Google Calendar */
+            foreach(var kvp in googleOutlookEventIDs)
+            {
+                Console.WriteLine(DateTime.Now + " Deleted from Google Calendar: " + kvp.Value.Summary);
+                service.Events.Delete("primary", kvp.Value.Id).Execute();
             }
 
         }
@@ -147,7 +194,7 @@ namespace GoogleCalendarToOutlookSyncer
             }
 
             /* Create Google Calendar API service. */
-            var service = new CalendarService(new BaseClientService.Initializer()
+            service = new CalendarService(new BaseClientService.Initializer()
             {
                 HttpClientInitializer = credential,
                 ApplicationName = ApplicationName,
