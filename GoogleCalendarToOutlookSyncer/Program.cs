@@ -108,16 +108,23 @@ namespace GoogleCalendarToOutlookSyncer
                     {
                         gevent = new Event()
                         {
-                            Start = new EventDateTime(),
-                            End = new EventDateTime(),
                             Description = "outlook-id:" + outlookEvent.EntryID
                         };
                         is_new = true;
                         Console.WriteLine(DateTime.Now + " Added in Google Calendar: " + outlookEvent.Subject);
                     };
 
-                    gevent.Start.DateTime = outlookEvent.Start;
-                    gevent.End.DateTime = outlookEvent.End;
+                    if (outlookEvent.AllDayEvent)
+                    {
+                        gevent.Start = new EventDateTime() { Date = outlookEvent.Start.ToString("yyyy-MM-dd") };
+                        gevent.End   = new EventDateTime() { Date = outlookEvent.End.ToString("yyyy-MM-dd") };
+                    }
+                    else
+                    {
+                        gevent.Start = new EventDateTime() { DateTime = outlookEvent.Start };
+                        gevent.End   = new EventDateTime() { DateTime = outlookEvent.End };
+                    }
+
                     gevent.Summary = outlookEvent.Subject;
                     gevent.Location = outlookEvent.Location;
                     gevent.Visibility = outlookEvent.Sensitivity == OlSensitivity.olPrivate ? "private" : "public";
