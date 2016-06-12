@@ -89,6 +89,7 @@ namespace GoogleCalendarToOutlookSyncer
                 outlookEvent.Subject = googleEvent.Summary;
                 outlookEvent.Sensitivity = googleEvent.Visibility == "private" ? OlSensitivity.olPrivate : OlSensitivity.olNormal;
                 outlookEvent.Location = googleEvent.Location;
+                outlookEvent.Body = "Source: Google Calendar";
                 outlookEvent.Save();
             }
 
@@ -101,14 +102,19 @@ namespace GoogleCalendarToOutlookSyncer
                 /* Created in Outlook, sync back to Google Calendar */
                 if (property == null)
                 {
-                    Event gevent = googleOutlookEventIDs.Where(kvp => kvp.Key == outlookEvent.EntryID).Select(kvp => kvp.Value).FirstOrDefault();
+                    var entryId = outlookEvent.EntryID;
+                    if (outlookEvent.RecurrenceState == OlRecurrenceState.olApptOccurrence)
+                        entryId += outlookEvent.Start.ToShortDateString();
+
+                    Event gevent = googleOutlookEventIDs.Where(kvp => kvp.Key == entryId).Select(kvp => kvp.Value).FirstOrDefault();
+                
                     bool is_new = false;
 
                     if (gevent == null)
                     {
                         gevent = new Event()
                         {
-                            Description = "outlook-id:" + outlookEvent.EntryID
+                            Description = "outlook-id:" + entryId
                         };
                         is_new = true;
                         Console.WriteLine(DateTime.Now + " Added in Google Calendar: " + outlookEvent.Subject);
@@ -135,7 +141,7 @@ namespace GoogleCalendarToOutlookSyncer
                         service.Events.Update(gevent, "primary", gevent.Id).Execute();
 
                     /* Remove from the list so we can track deleted events. */
-                    googleOutlookEventIDs.Remove(outlookEvent.EntryID);
+                    googleOutlookEventIDs.Remove(entryId);
 
                     continue;
                 }
