@@ -133,7 +133,7 @@ namespace GoogleCalendarToOutlookSyncer
 
                     gevent.Summary = outlookEvent.Subject;
                     gevent.Location = outlookEvent.Location;
-                    gevent.Visibility = outlookEvent.Sensitivity == OlSensitivity.olPrivate ? "private" : "public";
+                    gevent.Visibility = outlookEvent.Sensitivity == OlSensitivity.olPrivate ? "private" : "default";
 
                     if (is_new)
                         service.Events.Insert(gevent, "primary").Execute();
