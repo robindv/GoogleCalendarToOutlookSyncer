@@ -25,7 +25,7 @@ namespace GoogleCalendarToOutlookSyncer
 
         static CalendarService service;
         static DateTime min = DateTime.Today;
-        static DateTime max = new DateTime(2016, 12, 31);
+        static DateTime max = new DateTime(2017, 12, 31);
 
         static void Main(string[] args)
         {
