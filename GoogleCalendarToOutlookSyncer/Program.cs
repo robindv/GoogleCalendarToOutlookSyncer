@@ -11,7 +11,7 @@ using Google.Apis.Calendar.v3;
 using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
-
+using Google.Apis.Requests;
 
 namespace GoogleCalendarToOutlookSyncer
 {
@@ -31,13 +31,13 @@ namespace GoogleCalendarToOutlookSyncer
         {
             Console.WriteLine("Started! Press CTRL+C to exit.");
 
-            while(true)
+            while (true)
             {
                 try
                 {
                     sync();
                 }
-                catch(System.Exception e)
+                catch (System.Exception e)
                 {
                     Console.WriteLine($"{DateTime.Now} something went wrong, maybe the internet is down?");
                 }
@@ -45,14 +45,16 @@ namespace GoogleCalendarToOutlookSyncer
                 /* Sleep for 10 minutes */
                 Thread.Sleep(1000 * 60 * 10);
             }
+
         }
 
         static void sync()
-        { 
+        {
             Events googleEvents = getGoogleEvents();
             var outlookApp = new Microsoft.Office.Interop.Outlook.Application();
             var calendarFolder = outlookApp.Session.GetDefaultFolder(OlDefaultFolders.olFolderCalendar);
             var outlookEvents = GetOutlookAppointmentsInRange(calendarFolder, min, max);
+            var googleRequests = new BatchRequest(service);
 
             List<string> googleEventIDs = new List<string>();
             Dictionary<string, Event> googleOutlookEventIDs = new Dictionary<string, Event>();
@@ -63,9 +65,11 @@ namespace GoogleCalendarToOutlookSyncer
                 if (googleEvent?.Description?.Contains("no-sync") ?? false)
                     continue;
 
-                if(googleEvent?.Description?.Contains("outlook-id:") ?? false)
+                if (googleEvent?.Description?.Contains("outlook-id:") ?? false)
                 {
-                    googleOutlookEventIDs.Add(googleEvent.Description.Split(':')[1], googleEvent);
+                    var id = googleEvent.Description.Split(':')[1];
+                    if(!googleOutlookEventIDs.Any(i => i.Key == id))
+                        googleOutlookEventIDs.Add(id, googleEvent);
                     continue;
                 }
 
@@ -73,7 +77,7 @@ namespace GoogleCalendarToOutlookSyncer
                 googleEventIDs.Add(googleEvent.Id);
 
                 /* Find outlook event or create a new one */
-                if(outlookEvent == null)
+                if (outlookEvent == null)
                 {
                     outlookEvent = outlookApp.CreateItem(OlItemType.olAppointmentItem);
                     outlookEvent.UserProperties.Add(UserPropertyName, OlUserPropertyType.olText);
@@ -107,7 +111,7 @@ namespace GoogleCalendarToOutlookSyncer
                         entryId += outlookEvent.Start.ToShortDateString();
 
                     Event gevent = googleOutlookEventIDs.Where(kvp => kvp.Key == entryId).Select(kvp => kvp.Value).FirstOrDefault();
-                
+
                     bool is_new = false;
 
                     if (gevent == null)
@@ -123,12 +127,12 @@ namespace GoogleCalendarToOutlookSyncer
                     if (outlookEvent.AllDayEvent)
                     {
                         gevent.Start = new EventDateTime() { Date = outlookEvent.Start.ToString("yyyy-MM-dd") };
-                        gevent.End   = new EventDateTime() { Date = outlookEvent.End.ToString("yyyy-MM-dd") };
+                        gevent.End = new EventDateTime() { Date = outlookEvent.End.ToString("yyyy-MM-dd") };
                     }
                     else
                     {
                         gevent.Start = new EventDateTime() { DateTime = outlookEvent.Start };
-                        gevent.End   = new EventDateTime() { DateTime = outlookEvent.End };
+                        gevent.End = new EventDateTime() { DateTime = outlookEvent.End };
                     }
 
                     gevent.Summary = outlookEvent.Subject;
@@ -136,9 +140,9 @@ namespace GoogleCalendarToOutlookSyncer
                     gevent.Visibility = outlookEvent.Sensitivity == OlSensitivity.olPrivate ? "private" : "default";
 
                     if (is_new)
-                        service.Events.Insert(gevent, "primary").Execute();
+                        googleRequests.Queue<Event>(service.Events.Insert(gevent, "primary"), (content, error, ii, message) => { });
                     else
-                        service.Events.Update(gevent, "primary", gevent.Id).Execute();
+                        googleRequests.Queue<Event>(service.Events.Update(gevent, "primary", gevent.Id), (content, error, ii, message) => { });
 
                     /* Remove from the list so we can track deleted events. */
                     googleOutlookEventIDs.Remove(entryId);
@@ -147,15 +151,17 @@ namespace GoogleCalendarToOutlookSyncer
                 }
 
 
-                if(! googleEventIDs.Contains(property.Value))
+                if (!googleEventIDs.Contains(property.Value))
                 {
                     Console.WriteLine(DateTime.Now + " Deleted from Outlook: " + outlookEvent.Subject);
                     outlookEvent.Delete();
                 }
             }
 
+            googleRequests.ExecuteAsync();
+
             /* Remove deleted events Outlook events from Google Calendar */
-            foreach(var kvp in googleOutlookEventIDs)
+            foreach (var kvp in googleOutlookEventIDs)
             {
                 Console.WriteLine(DateTime.Now + " Deleted from Google Calendar: " + kvp.Value.Summary);
                 service.Events.Delete("primary", kvp.Value.Id).Execute();
