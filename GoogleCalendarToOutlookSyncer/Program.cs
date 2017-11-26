@@ -91,7 +91,7 @@ namespace GoogleCalendarToOutlookSyncer
                 outlookEvent.Start = googleEvent.Start?.DateTime ?? DateTime.Parse(googleEvent.Start.Date);
                 outlookEvent.End = googleEvent.End?.DateTime ?? DateTime.Parse(googleEvent.End.Date);
                 outlookEvent.Subject = googleEvent.Summary;
-                outlookEvent.Sensitivity = googleEvent.Visibility == "private" ? OlSensitivity.olPrivate : OlSensitivity.olNormal;
+                outlookEvent.Sensitivity = googleEvent.Visibility == "private" || (googleEvent.Description?.Contains("private") ?? false) ? OlSensitivity.olPrivate : OlSensitivity.olNormal;
                 outlookEvent.Location = googleEvent.Location;
                 outlookEvent.Body = "Source: Google Calendar";
                 outlookEvent.Save();
