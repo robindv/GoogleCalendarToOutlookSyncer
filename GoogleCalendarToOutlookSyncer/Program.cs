@@ -25,7 +25,7 @@ namespace GoogleCalendarToOutlookSyncer
 
         static CalendarService service;
         static DateTime min = DateTime.Today;
-        static DateTime max = new DateTime(2017, 12, 31);
+        static DateTime max = new DateTime(2018, 1, 31);
 
         static void Main(string[] args)
         {
@@ -107,7 +107,7 @@ namespace GoogleCalendarToOutlookSyncer
                 if (property == null)
                 {
                     var entryId = outlookEvent.EntryID;
-                    if (outlookEvent.RecurrenceState == OlRecurrenceState.olApptOccurrence)
+                    if (outlookEvent.RecurrenceState != OlRecurrenceState.olApptNotRecurring)
                         entryId += outlookEvent.Start.ToShortDateString();
 
                     Event gevent = googleOutlookEventIDs.Where(kvp => kvp.Key == entryId).Select(kvp => kvp.Value).FirstOrDefault();
@@ -226,6 +226,7 @@ namespace GoogleCalendarToOutlookSyncer
             request.SingleEvents = true;
             request.TimeMax = max;
             request.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
+            request.MaxResults = 2500;
             Events events = request.Execute();
 
             return events;
