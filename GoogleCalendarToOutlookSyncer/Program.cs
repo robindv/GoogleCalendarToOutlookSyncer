@@ -65,6 +65,9 @@ namespace GoogleCalendarToOutlookSyncer
                 if (googleEvent?.Description?.Contains("no-sync") ?? false)
                     continue;
 
+                if (googleEvent?.PrivateCopy ?? false)
+                    continue;
+
                 if (googleEvent?.Description?.Contains("outlook-id:") ?? false)
                 {
                     var id = googleEvent.Description.Split(':')[1];
